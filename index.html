@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>個人投資收益分配與獲利紀錄通知書 (雲端同步版)</title>
+  <style>
+    :root {
+      --bg-page: #f0f2f5;
+      --paper-bg: #ffffff;
+      --border-dark: #2c3e50;
+      --border-light: #bdc3c7;
+      --header-bg: #eef3f7;
+      --accent-red: #c0392b;
+      --accent-green: #27ae60;
+      --primary-blue: #1a5276;
+    }
+
+    * { box-sizing: border-box; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; }
+    body { background-color: var(--bg-page); margin: 0; padding: 16px; color: #222; }
+
+    /* 密碼鎖遮罩 */
+    #lockScreen {
+      position: fixed; inset: 0; background: #1f2d3d; z-index: 9999;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .lock-card {
+      background: #fff; padding: 32px; border-radius: 8px; max-width: 360px; width: 100%;
+      text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+    .lock-card h2 { margin-top: 0; color: var(--border-dark); font-size: 20px; }
+    .lock-card input {
+      width: 100%; padding: 10px; font-size: 16px; text-align: center;
+      border: 1px solid #ccc; border-radius: 4px; margin: 14px 0; letter-spacing: 3px;
+    }
+
+    /* 控制列（列印時隱藏） */
+    .toolbar {
+      max-width: 920px; margin: 0 auto 16px auto;
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center;
+      background: #fff; padding: 12px 16px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .status-badge {
+      font-size: 12px; padding: 3px 8px; border-radius: 12px; font-weight: bold;
+    }
+    .status-syncing { background: #fef9e7; color: #b7950b; border: 1px solid #f7dc6f; }
+    .status-ok { background: #eafaf1; color: #1e8449; border: 1px solid #a9dfbf; }
+    .status-err { background: #fdedec; color: #c0392b; border: 1px solid #f5b7b1; }
+
+    .btn {
+      padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer;
+      font-size: 14px; font-weight: bold; transition: 0.2s;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background: var(--primary-blue); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #154360; }
+    .btn-outline { background: #fff; border: 1px solid #95a5a6; color: #333; }
+    .btn-outline:hover:not(:disabled) { background: #f8f9fa; }
+    .btn-danger { background: #e74c3c; color: #fff; padding: 4px 8px; font-size: 12px; }
+
+    /* 通知書本體紙張樣式 */
+    .notice-paper {
+      max-width: 920px; margin: 0 auto; background: var(--paper-bg);
+      border: 2px solid var(--border-dark); padding: 24px 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1); position: relative;
+    }
+
+    .notice-header {
+      text-align: center; border-bottom: 2px solid var(--border-dark);
+      padding-bottom: 14px; margin-bottom: 18px; position: relative;
+    }
+    .notice-header h1 {
+      margin: 0; font-size: 23px; letter-spacing: 2px; color: var(--border-dark);
+    }
+    .notice-header .sub { font-size: 13px; color: #555; margin-top: 6px; }
+    .stamp-box {
+      position: absolute; right: 0; top: 0;
+      border: 2px solid var(--accent-red); color: var(--accent-red);
+      padding: 4px 10px; font-weight: bold; font-size: 13px;
+      transform: rotate(-4deg); border-radius: 4px;
+    }
+
+    /* 表格樣式 */
+    .table-wrap { overflow-x: auto; }
+    .meta-table, .form-table, .record-table {
+      width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 14px;
+    }
+    .meta-table th, .meta-table td,
+    .form-table th, .form-table td,
+    .record-table th, .record-table td {
+      border: 1px solid var(--border-dark); padding: 8px 10px;
+    }
+    .meta-table th, .form-table th, .record-table th {
+      background-color: var(--header-bg); font-weight: bold; text-align: center; color: #1f2d3d;
+    }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .num-font { font-family: "Consolas", "Courier New", monospace; font-weight: bold; }
+    .profit-pos { color: var(--accent-red); }
+    .profit-neg { color: var(--accent-green); }
+
+    /* 表單區塊 */
+    .section-title {
+      font-size: 15px; font-weight: bold; background: var(--border-dark); color: #fff;
+      padding: 7px 12px; margin-bottom: 0; letter-spacing: 1px;
+    }
+    .form-grid input, .form-grid select {
+      width: 100%; padding: 6px 8px; border: 1px solid #bdc3c7; border-radius: 3px; font-size: 14px;
+    }
+    .form-grid input:focus, .form-grid select:focus {
+      outline: none; border-color: var(--primary-blue); background: #f4f9fd;
+    }
+    .readonly-box { background: #f8f9fa; font-weight: bold; color: var(--primary-blue); }
+
+    .notice-footer {
+      font-size: 12px; color: #555; border-top: 1px dashed #999; padding-top: 12px; line-height: 1.6;
+    }
+
+    @media (max-width: 680px) {
+      .stamp-box { position: static; display: inline-block; margin-top: 8px; transform: none; }
+      .notice-paper { padding: 16px; }
+    }
+
+    @media print {
+      body { background: #fff; padding: 0; }
+      .toolbar, .input-section, .no-print, #lockScreen { display: none !important; }
+      .notice-paper { box-shadow: none; border: 2px solid #000; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 簡易隱私密碼鎖 -->
+  <div id="lockScreen">
+    <div class="lock-card">
+      <h2>🔒 個人收益分配帳本</h2>
+      <p style="font-size: 13px; color: #666; margin-bottom: 0;">請輸入檢視密碼以讀取雲端試算表</p>
+      <input type="password" id="passInput" placeholder="輸入密碼" onkeydown="if(event.key==='Enter') unlock()">
+      <button class="btn btn-primary" style="width: 100%;" onclick="unlock()">解鎖並同步資料</button>
+    </div>
+  </div>
+
+  <!-- 頂部功能列 -->
+  <div class="toolbar">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <strong>☁️ Google Sheets 雲端帳本</strong>
+      <span id="syncStatus" class="status-badge status-syncing">等待解鎖</span>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="btn btn-outline" id="btnRefresh" onclick="fetchFromCloud()">🔄 重新同步</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ 列印 / 存成 PDF</button>
+    </div>
+  </div>
+
+  <!-- 收益分配通知書主體 -->
+  <div class="notice-paper">
+    <div class="notice-header">
+      <h1>證券暨 ETF 收益分配與獲利通知書</h1>
+      <div class="sub">個人投資損益結算明細表（Google 雲端試算表即時同步版）</div>
+      <div class="stamp-box">雲端已連線</div>
+    </div>
+
+    <!-- 投資人與彙總資訊欄 -->
+    <div class="table-wrap">
+      <table class="meta-table">
+        <tr>
+          <th width="16%">投資人戶名</th>
+          <td width="34%"><input type="text" id="investorName" value="個人投資專戶" onchange="saveMeta()" style="border:none; font-weight:bold; width:100%;"></td>
+          <th width="18%">結算製表日期</th>
+          <td width="32%" id="reportDate" class="text-center num-font"></td>
+        </tr>
+        <tr>
+          <th>累計配息/價差總額</th>
+          <td class="text-right num-font" id="sumGross">NT$ 0</td>
+          <th>累計稅費與匯費</th>
+          <td class="text-right num-font" id="sumFee">NT$ 0</td>
+        </tr>
+        <tr>
+          <th>累計實際入帳淨額</th>
+          <td class="text-right num-font profit-pos" style="font-size: 16px;" id="sumNet">NT$ 0</td>
+          <th>年度補充保費累計<br><span style="font-size:11px; font-weight:normal;">(單筆達2萬扣2.11%)</span></th>
+          <td class="text-right num-font" id="sumNhi">NT$ 0</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 新增紀錄表單 -->
+    <div class="input-section">
+      <div class="section-title">＋ 新增收益分配 / 賣出獲利紀錄</div>
+      <div class="table-wrap">
+        <table class="form-table form-grid">
+          <tr>
+            <th width="15%">入帳/交割日</th>
+            <th width="15%">證券代號</th>
+            <th width="22%">標的名稱</th>
+            <th width="16%">收益類別</th>
+            <th width="16%">持有股數/單位</th>
+            <th width="16%">每單位分配/價差</th>
+          </tr>
+          <tr>
+            <td><input type="date" id="inDate"></td>
+            <td><input type="text" id="inCode" placeholder="例: 00878"></td>
+            <td><input type="text" id="inName" placeholder="例: 國泰永續高股息"></td>
+            <td>
+              <select id="inType">
+                <option value="ETF配息">ETF 收益分配</option>
+                <option value="股票股利">現金股利</option>
+                <option value="價差獲利">波段賣出價差</option>
+              </select>
+            </td>
+            <td><input type="number" id="inShares" placeholder="1000" oninput="calcPreview()"></td>
+            <td><input type="number" step="0.0001" id="inPerUnit" placeholder="0.55" oninput="calcPreview()"></td>
+          </tr>
+          <tr>
+            <th>收益分配總額</th>
+            <th>二代健保 (2.11%)</th>
+            <th>匯費 / 交易稅費</th>
+            <th>所得類別備註</th>
+            <th colspan="2">實領淨額 (自動試算)</th>
+          </tr>
+          <tr>
+            <td><input type="number" id="inGross" placeholder="自動計算或手動改" oninput="calcNetOnly()"></td>
+            <td><input type="number" id="inNhi" value="0" oninput="calcNetOnly()"></td>
+            <td><input type="number" id="inFee" value="10" oninput="calcNetOnly()"></td>
+            <td><input type="text" id="inNote" placeholder="例: 54C股利 / 平準金"></td>
+            <td colspan="2" class="readonly-box text-right num-font" id="previewNet">NT$ 0</td>
+          </tr>
+          <tr>
+            <td colspan="6" class="text-center" style="background:#f9fbfd;">
+              <button class="btn btn-primary" id="btnSubmit" style="width: 260px;" onclick="addRecord()">☁️ 登錄並同步至 Google Sheets</button>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 收益分配明細表 -->
+    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>收益分配暨已實現獲利明細表</span>
+      <select id="filterYear" onchange="renderTable()" style="font-size:12px; padding:2px 6px; border-radius:3px;">
+        <option value="ALL">顯示全部年度</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table class="record-table">
+        <thead>
+          <tr>
+            <th width="11%">入帳日期</th>
+            <th width="19%">標的代號 / 名稱</th>
+            <th width="11%">類別</th>
+            <th width="10%">股數</th>
+            <th width="12%">分配總額</th>
+            <th width="10%">二代健保</th>
+            <th width="10%">匯費/稅費</th>
+            <th width="12%">實領淨額</th>
+            <th width="5%" class="no-print">操作</th>
+          </tr>
+        </thead>
+        <tbody id="recordBody">
+          <tr><td colspan="9" class="text-center" style="color:#888;">解鎖後自動載入雲端資料...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 通知書制式說明 -->
+    <div class="notice-footer">
+      <strong>【收益分配說明事項】</strong><br>
+      1. 計算公式：<code>實領淨額 ＝ 收益分配總額（股數 × 每單位分配金額） － 二代健保補充保費 － 跨行匯費/交易稅費</code>。<br>
+      2. 依健保法規定，單筆股利所得（54C 境內股利或利息所得）達新台幣 20,000 元（含）以上者，系統自動試算代扣 2.11% 補充保費（若屬收益平準金或海外所得可手動調整為 0）。<br>
+      3. 本帳本已直接綁定個人 Google 試算表，任何裝置新增或刪除皆會即時寫入雲端，亦可隨時開啟 Google Sheets 搭配 Gemini 進行年度稅務與配息分析。
+    </div>
+  </div>
+
+  <script>
+    // 你的 Google Apps Script API 網址
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzYIwwp50nNr0bCrhowE-zfwZUGm1smJgA010BW0wsLBEAMHefRYzKZn4qNUQpI5IGmNA/exec';
+    
+    // 檢視密碼設定（可自行修改引號內的密碼）
+    const VIEW_PASS = '1234';
+    const META_KEY = 'stock_dividend_meta_v1';
+    let records = [];
+
+    window.onload = () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('inDate').value = today;
+      document.getElementById('reportDate').innerText = today.replace(/-/g, '/');
+
+      const savedMeta = localStorage.getItem(META_KEY);
+      if (savedMeta) document.getElementById('investorName').value = savedMeta;
+
+      // 若本次瀏覽器分頁已解鎖過則自動進入
+      if (sessionStorage.getItem('unlocked') === 'true') {
+        document.getElementById('lockScreen').style.display = 'none';
+        fetchFromCloud();
+      }
+    };
+
+    function unlock() {
+      const input = document.getElementById('passInput').value;
+      if (input === VIEW_PASS) {
+        sessionStorage.setItem('unlocked', 'true');
+        document.getElementById('lockScreen').style.display = 'none';
+        fetchFromCloud();
+      } else {
+        alert('密碼錯誤，請重新輸入！');
+        document.getElementById('passInput').value = '';
+      }
+    }
+
+    function saveMeta() {
+      localStorage.setItem(META_KEY, document.getElementById('investorName').value);
+    }
+
+    function setStatus(type, text) {
+      const el = document.getElementById('syncStatus');
+      el.className = 'status-badge ' + (type === 'ok' ? 'status-ok' : type === 'err' ? 'status-err' : 'status-syncing');
+      el.innerText = text;
+    }
+
+    // 從 Google Sheets 讀取資料
+    async function fetchFromCloud() {
+      setStatus('syncing', '⏳ 雲端讀取中...');
+      document.getElementById('btnRefresh').disabled = true;
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+        
+        // 整理並格式化日期與數字
+        records = data.filter(r => r.id).map(r => {
+          let dateStr = String(r.date || '');
+          if (dateStr.includes('T')) {
+            // 處理 Google Sheets 自動轉成 ISO 時間字串的情況 (修正時區偏移)
+            const d = new Date(dateStr);
+            dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          } else {
+            dateStr = dateStr.replace(/\//g, '-');
+          }
+          const gross = Number(r.gross) || 0;
+          const nhi = Number(r.nhi) || 0;
+          const fee = Number(r.fee) || 0;
+          return {
+            id: r.id,
+            date: dateStr,
+            code: String(r.code || ''),
+            name: String(r.name || ''),
+            type: String(r.type || ''),
+            shares: Number(r.shares) || 0,
+            perUnit: Number(r.perUnit) || 0,
+            gross,
+            nhi,
+            fee,
+            net: gross - nhi - fee,
+            note: String(r.note || '')
+          };
+        }).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+        updateYearFilter();
+        renderTable();
+        setStatus('ok', `✔ 已同步 (${records.length} 筆)`);
+      } catch (err) {
+        console.error(err);
+        setStatus('err', '❌ 連線失敗，請檢查試算表權限');
+        alert('讀取 Google Sheets 失敗！請確認：\n1. 試算表第一列標題是否為 id, date, code, name, type, shares, perUnit, gross, nhi, fee, note\n2. 分頁名稱是否為「工作表1」');
+      } finally {
+        document.getElementById('btnRefresh').disabled = false;
+      }
+    }
+
+    function calcPreview() {
+      const shares = parseFloat(document.getElementById('inShares').value) || 0;
+      const perUnit = parseFloat(document.getElementById('inPerUnit').value) || 0;
+      const gross = Math.round(shares * perUnit);
+      document.getElementById('inGross').value = gross > 0 ? gross : '';
+
+      const nhi = gross >= 20000 ? Math.round(gross * 0.0211) : 0;
+      document.getElementById('inNhi').value = nhi;
+      calcNetOnly();
+    }
+
+    function calcNetOnly() {
+      const gross = parseFloat(document.getElementById('inGross').value) || 0;
+      const nhi = parseFloat(document.getElementById('inNhi').value) || 0;
+      const fee = parseFloat(document.getElementById('inFee').value) || 0;
+      const net = gross - nhi - fee;
+      document.getElementById('previewNet').innerText = `NT$ ${net.toLocaleString()}`;
+    }
+
+    // 新增資料並寫入 Google Sheets
+    async function addRecord() {
+      const date = document.getElementById('inDate').value;
+      const code = document.getElementById('inCode').value.trim().toUpperCase();
+      const name = document.getElementById('inName').value.trim();
+      const type = document.getElementById('inType').value;
+      const shares = parseFloat(document.getElementById('inShares').value) || 0;
+      const perUnit = parseFloat(document.getElementById('inPerUnit').value) || 0;
+      const gross = parseFloat(document.getElementById('inGross').value) || 0;
+      const nhi = parseFloat(document.getElementById('inNhi').value) || 0;
+      const fee = parseFloat(document.getElementById('inFee').value) || 0;
+      const note = document.getElementById('inNote').value.trim();
+
+      if (!date || !code || gross === 0) {
+        alert('請至少填寫「日期」、「證券代號」與「收益金額」！');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.innerText = '⏳ 正在寫入 Google 試算表...';
+      setStatus('syncing', '⏳ 寫入雲端中...');
+
+      const newRecord = {
+        id: Date.now(), date, code, name, type, shares, perUnit, gross, nhi, fee, note
+      };
+
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors', // 避免 Apps Script CORS 阻擋
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'add', record: newRecord })
+        });
+
+        // 清空輸入欄
+        document.getElementById('inCode').value = '';
+        document.getElementById('inName').value = '';
+        document.getElementById('inShares').value = '';
+        document.getElementById('inPerUnit').value = '';
+        document.getElementById('inGross').value = '';
+        document.getElementById('inNhi').value = '0';
+        document.getElementById('inNote').value = '';
+        document.getElementById('previewNet').innerText = 'NT$ 0';
+
+        // 等待 1 秒讓 Google Sheets 完成寫入後重新抓取最新列表
+        setTimeout(() => fetchFromCloud(), 1000);
+      } catch (err) {
+        alert('寫入失敗：' + err.message);
+        setStatus('err', '❌ 寫入失敗');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '☁️ 登錄並同步至 Google Sheets';
+      }
+    }
+
+    // 從 Google Sheets 刪除資料
+    async function deleteRecord(id) {
+      if (!confirm('確定要從 Google 試算表中永久刪除此筆紀錄嗎？')) return;
+      setStatus('syncing', '⏳ 刪除雲端資料中...');
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'delete', id: id })
+        });
+        setTimeout(() => fetchFromCloud(), 1000);
+      } catch (err) {
+        alert('刪除失敗：' + err.message);
+        setStatus('err', '❌ 刪除失敗');
+      }
+    }
+
+    function updateYearFilter() {
+      const select = document.getElementById('filterYear');
+      const currentVal = select.value;
+      const years = [...new Set(records.map(r => r.date.substring(0, 4)).filter(Boolean))].sort().reverse();
+      select.innerHTML = '<option value="ALL">顯示全部年度</option>';
+      years.forEach(y => {
+        select.innerHTML += `<option value="${y}">${y} 年度</option>`;
+      });
+      if (years.includes(currentVal)) select.value = currentVal;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('recordBody');
+      const filterYear = document.getElementById('filterYear').value;
+      tbody.innerHTML = '';
+
+      let totalGross = 0, totalFee = 0, totalNhi = 0, totalNet = 0;
+      const filtered = records.filter(r => filterYear === 'ALL' || r.date.startsWith(filterYear));
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="color:#888; padding:16px;">目前尚無符合條件的收益紀錄，請由上方表單新增。</td></tr>';
+      }
+
+      filtered.forEach(r => {
+        totalGross += r.gross;
+        totalNhi += r.nhi;
+        totalFee += (r.fee + r.nhi);
+        totalNet += r.net;
+
+        const netClass = r.net >= 0 ? 'profit-pos' : 'profit-neg';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="text-center num-font">${r.date}</td>
+          <td><strong>${r.code}</strong> ${r.name}<br><span style="font-size:11px;color:#666;">${r.note || ''}</span></td>
+          <td class="text-center">${r.type}</td>
+          <td class="text-right num-font">${r.shares ? r.shares.toLocaleString() : '-'}</td>
+          <td class="text-right num-font">${r.gross.toLocaleString()}</td>
+          <td class="text-right num-font">${r.nhi.toLocaleString()}</td>
+          <td class="text-right num-font">${r.fee.toLocaleString()}</td>
+          <td class="text-right num-font ${netClass}">${r.net.toLocaleString()}</td>
+          <td class="text-center no-print"><button class="btn btn-danger" onclick="deleteRecord('${r.id}')">刪</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('sumGross').innerText = `NT$ ${totalGross.toLocaleString()}`;
+      document.getElementById('sumFee').innerText = `NT$ ${totalFee.toLocaleString()}`;
+      document.getElementById('sumNhi').innerText = `NT$ ${totalNhi.toLocaleString()}`;
+      document.getElementById('sumNet').innerText = `NT$ ${totalNet.toLocaleString()}`;
+    }
+  </script>
+</body>
+</html>
